@@ -5,11 +5,12 @@ void setup()
   Serial.begin(115200);
 
   initOk = accInit(10);
-  if (initOk)
-    Serial.println("Acc init ok!");
-  else
-    Serial.println("Acc init failed!");
-
+  /*
+    if (initOk)
+      Serial.println("Acc init ok!");
+    else
+      Serial.println("Acc init failed!");
+  */
 }
 
 void loop()
@@ -22,5 +23,9 @@ void loop()
     Serial.print(accGetY());
     Serial.print(" Z: ");
     Serial.println(accGetZ());
+  }
+  else
+  {
+    initOk = accInit(10);
   }
 }
