@@ -1,4 +1,5 @@
 //Arduino library for Gyro SCC1300D02 by Dusan Jovanovic and Milan Savic
+//Not tested due to hardware problems
 #ifndef SPI_GYRO
 #define SPI_GYRO
 
