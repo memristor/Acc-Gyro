@@ -12,6 +12,9 @@
 #define GYRO_IC_ID 0x07
 #define GYRO_STATUS_CONFIG 0x08
 #define GYRO_TEMP 0x0A
+
+#define BIT_S_OK (1 << 1)
+#define BIT_SOFTRESET (1 << 1)
 static int gyroPin = 9;
 
 uint16_t gyroCmd(uint8_t addr, bool rw, uint16_t data)
@@ -45,16 +48,28 @@ uint16_t gyroCmd(uint8_t addr, bool rw, uint16_t data)
   }
   data |= (br % 2 == 0);
 
-  Serial.println("Prva i druga rec u gyroCmd:");
+  /*Serial.println("Prva i druga rec u gyroCmd:");
   Serial.println(fWord, HEX); //for debugging
-  Serial.println(data, HEX);  //for debugging
+  Serial.println(data, HEX);  //for debugging*/
 
   SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
   digitalWrite(gyroPin, LOW);
-  uint16_t rfirst = SPI.transfer(fWord);
-  Serial.print("Status: "); //for debugging
-  Serial.println(rfirst, HEX);  //for debugging
-  uint16_t rsecond = SPI.transfer(data);
+  
+  rfirst = SPI.transfer((fWord & 0xFF00) >> 8) & 0x00FF;
+  rfirst = rfirst << 8;
+  rfirst |= SPI.transfer(fWord & 0x00FF) & 0x00FF;  //first 16 bits transferred
+  
+  rsecond = SPI.transfer((data & 0xFF00) >> 8) & 0x00FF;
+  rsecond = rsecond << 8;
+  rsecond |= SPI.transfer(data & 0x00FF) & 0x00FF;  //second (last) 16 bits transferred
+  
+  
+  /*rfirst = SPI.transfer16(fWord);
+    Serial.println(rfirst, HEX); //debugging use
+    rsecond = SPI.transfer16(data);*/ 
+  //^^^^^this can be used to transfer 16 bits at once instead of splitting it in 1 byte chunks, doesn't affect the problem we have with init
+
+  
   digitalWrite(gyroPin, HIGH);
   SPI.endTransaction();
 
@@ -71,16 +86,28 @@ bool gyroInit(int p)
   delay(800);
 
   gyroCmd(GYRO_STATUS_CONFIG, READ, 0);
-  bool check = gyroCmd(GYRO_STATUS_CONFIG, READ, 0);
+  uint16_t check = gyroCmd(GYRO_STATUS_CONFIG, READ, 0);
 
-  if (check & 0x3FFE)
+  if (check & BIT_S_OK)
     return true;
   else
+  {
+    gyroCmd(GYRO_IC_ID, WRITE, BIT_SOFTRESET);  //do a software reset
+    delay(800);
+    
+    gyroCmd(GYRO_STATUS_CONFIG, READ, 0);
+    check = gyroCmd(GYRO_STATUS_CONFIG, READ, 0); //read status register twice to clear error flags
+    
+    Serial.print("Status register after soft reset(hex): ");  //for debugging
+    Serial.println(check, HEX);
+    
     return false;
+  }
 }
 
 double gyroGetX()
 {
+  //has to be tested, solve init problem first
   uint16_t val = gyroCmd(GYRO_RATE_X, READ, 0);
   val = (val >> 2) | (val & 0x8000) | 0x4000;
 
@@ -90,9 +117,10 @@ double gyroGetX()
 
 double gyroGetTemp()
 {
+  //has to be tested, solve init problem first
   uint16_t val = gyroCmd(GYRO_TEMP, READ, 0);
   Serial.println(val, HEX);
-  val = (val >> 2) | (val & 0x8000) | 0x4000;
+  val = (val >> 2) | (val & 0x8000);// | 0x4000;
   Serial.println(val, HEX);
 
   int16_t retVal = val;
